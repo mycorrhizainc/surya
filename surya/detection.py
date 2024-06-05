@@ -7,7 +7,7 @@ from PIL import Image
 from surya.model.detection.segformer import SegformerForRegressionMask
 from surya.postprocessing.heatmap import get_and_clean_boxes
 from surya.postprocessing.affinity import get_vertical_lines
-from surya.input.processing import prepare_image, split_image, get_total_splits
+from surya.input.processing import prepare_image_detection, split_image, get_total_splits, convert_if_not_rgb
 from surya.schema import TextDetectionResult
 from surya.settings import settings
 from tqdm import tqdm
@@ -30,6 +30,8 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
         batch_size = get_batch_size()
     heatmap_count = model.config.num_labels
 
+    images = [image.convert("RGB") for image in images]  # also copies the images
+
     orig_sizes = [image.size for image in images]
     splits_per_image = [get_total_splits(size, processor) for size in orig_sizes]
 
@@ -51,7 +53,7 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
     all_preds = []
     for batch_idx in tqdm(range(len(batches)), desc="Detecting bboxes"):
         batch_image_idxs = batches[batch_idx]
-        batch_images = [images[j].convert("RGB") for j in batch_image_idxs]
+        batch_images = convert_if_not_rgb([images[j] for j in batch_image_idxs])
 
         split_index = []
         split_heights = []
@@ -62,7 +64,7 @@ def batch_detection(images: List, model: SegformerForRegressionMask, processor, 
             split_index.extend([image_idx] * len(image_parts))
             split_heights.extend(split_height)
 
-        image_splits = [prepare_image(image, processor) for image in image_splits]
+        image_splits = [prepare_image_detection(image, processor) for image in image_splits]
         # Batch images in dim 0
         batch = torch.stack(image_splits, dim=0).to(model.dtype).to(model.device)
 

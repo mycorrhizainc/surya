@@ -1,23 +1,20 @@
-from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
 from typing import List
-from tqdm import tqdm
-
-import torch
 from PIL import Image
 
 from surya.detection import batch_text_detection
-from surya.input.processing import slice_polys_from_image, slice_bboxes_from_image
-from surya.postprocessing.text import truncate_repetitions, sort_text_lines
+from surya.input.processing import slice_polys_from_image, slice_bboxes_from_image, convert_if_not_rgb
+from surya.postprocessing.text import sort_text_lines
 from surya.recognition import batch_recognition
 from surya.schema import TextLine, OCRResult
-from surya.settings import settings
 
 
 def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model, rec_processor, bboxes: List[List[List[int]]] = None, polygons: List[List[List[List[int]]]] = None, batch_size=None) -> List[OCRResult]:
     # Polygons need to be in corner format - [[x1, y1], [x2, y2], [x3, y3], [x4, y4]], bboxes in [x1, y1, x2, y2] format
     assert bboxes is not None or polygons is not None
     assert len(images) == len(langs), "You need to pass in one list of languages for each image"
+
+    images = convert_if_not_rgb(images)
+
     slice_map = []
     all_slices = []
     all_langs = []
@@ -63,11 +60,13 @@ def run_recognition(images: List[Image.Image], langs: List[List[str]], rec_model
 
 
 def run_ocr(images: List[Image.Image], langs: List[List[str]], det_model, det_processor, rec_model, rec_processor, batch_size=None) -> List[OCRResult]:
+    images = convert_if_not_rgb(images)
     det_predictions = batch_text_detection(images, det_model, det_processor)
 
     all_slices = []
     slice_map = []
     all_langs = []
+
     for idx, (det_pred, image, lang) in enumerate(zip(det_predictions, images, langs)):
         polygons = [p.polygon for p in det_pred.bboxes]
         slices = slice_polys_from_image(image, polygons)

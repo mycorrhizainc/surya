@@ -1,5 +1,3 @@
-import os
-import random
 from typing import List
 
 import cv2
@@ -9,6 +7,15 @@ import pypdfium2
 from PIL import Image, ImageOps, ImageDraw
 import torch
 from surya.settings import settings
+
+
+def convert_if_not_rgb(images: List[Image.Image]) -> List[Image.Image]:
+    new_images = []
+    for image in images:
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        new_images.append(image)
+    return new_images
 
 
 def get_total_splits(image_size, processor):
@@ -45,10 +52,11 @@ def split_image(img, processor):
     return [img.copy()], [img_height]
 
 
-def prepare_image(img, processor):
+def prepare_image_detection(img, processor):
     new_size = (processor.size["width"], processor.size["height"])
 
-    img.thumbnail(new_size, Image.Resampling.LANCZOS) # Shrink largest dimension to fit new size
+    # This double resize actually necessary for downstream accuracy
+    img.thumbnail(new_size, Image.Resampling.LANCZOS)
     img = img.resize(new_size, Image.Resampling.LANCZOS) # Stretch smaller dimension to fit new size
 
     img = np.asarray(img, dtype=np.uint8)
@@ -81,7 +89,7 @@ def slice_bboxes_from_image(image: Image.Image, bboxes):
 
 
 def slice_polys_from_image(image: Image.Image, polys):
-    image_array = np.array(image)
+    image_array = np.array(image, dtype=np.uint8)
     lines = []
     for idx, poly in enumerate(polys):
         lines.append(slice_and_pad_poly(image_array, poly))
@@ -98,8 +106,9 @@ def slice_and_pad_poly(image_array: np.array, coordinates):
     coordinates = [(x - bbox[0], y - bbox[1]) for x, y in coordinates]
 
     # Pad the area outside the polygon with the pad value
-    mask = np.zeros_like(cropped_polygon, dtype=np.uint8)
+    mask = np.zeros(cropped_polygon.shape[:2], dtype=np.uint8)
     cv2.fillPoly(mask, [np.int32(coordinates)], 1)
+    mask = np.stack([mask] * 3, axis=-1)
 
     cropped_polygon[mask == 0] = settings.RECOGNITION_PAD_VALUE
     rectangle_image = Image.fromarray(cropped_polygon)

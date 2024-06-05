@@ -3,16 +3,14 @@ import collections
 import copy
 import json
 
-from surya.benchmark.metrics import precision_recall
+from surya.input.processing import convert_if_not_rgb
 from surya.model.ordering.model import load_model
 from surya.model.ordering.processor import load_processor
-from surya.postprocessing.heatmap import draw_bboxes_on_image
 from surya.ordering import batch_ordering
 from surya.settings import settings
 from surya.benchmark.metrics import rank_accuracy
 import os
 import time
-from tabulate import tabulate
 import datasets
 
 
@@ -32,7 +30,7 @@ def main():
         split = f"train[:{args.max}]"
     dataset = datasets.load_dataset(settings.ORDER_BENCH_DATASET_NAME, split=split)
     images = list(dataset["image"])
-    images = [i.convert("RGB") for i in images]
+    images = convert_if_not_rgb(images)
     bboxes = list(dataset["bboxes"])
 
     start = time.time()
